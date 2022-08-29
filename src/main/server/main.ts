@@ -55,39 +55,44 @@ const rl = Object.assign(rawReadline, {
     if (e instanceof Error) process.stdout.write(`${e.message}\n`);
     process.exit(1);
   }
-  await server.start();
+  await server.open();
   process.stdout.write("done\n");
+
+  let warehouse: string | null = null;
 
   while (true) {
     rl.prompt();
     const command = await rl.getLine();
-    const tokens = command.split(/\s+/).filter((s) => s !== "");
 
-    if (tokens.length === 0) continue;
-    switch (tokens[0]) {
-      case "exit":
-      case "quit": {
-        if (tokens.length > 1) {
-          process.stdout.write(`expected no arguments, got ${tokens.length}\n`);
-          continue;
-        }
+    if (command.trim() === "") {
+      continue;
+    }
 
-        rl.close();
-        server.close();
-        process.exit(0);
+    if (command === "exit" || command === "quit") {
+      rl.close();
+      server.close();
+      process.exit(0);
+    } else if (command === "use") {
+      warehouse = null;
+      rl.setPrompt("> ");
+    } else if (command.match(/^use \w+$/)) {
+      const newWarehouse = (
+        command.match(/^use (\w+)$/) as RegExpMatchArray
+      )[1] as string;
+      if (!server.hasWarehouse(newWarehouse)) {
+        process.stdout.write(`No warehouse named ${newWarehouse} exists\n`);
+        continue;
       }
-      case "help": {
-        process.stdout.write("Commands:\n");
-        process.stdout.write("exit | quit - exit the program\n");
-        process.stdout.write("help - print command usage\n");
-        break;
-      }
-      default: {
-        process.stdout.write(
-          `Unknown command: ${tokens[0]} - use \`help\` to view a list of commands\n`,
-        );
-        break;
-      }
+
+      warehouse = newWarehouse;
+      rl.setPrompt(`${warehouse}> `);
+    } else {
+      const { ok: _ok, result: result } = await server.processCommand(
+        warehouse,
+        command,
+        true,
+      );
+      process.stdout.write(result);
     }
   }
 })();

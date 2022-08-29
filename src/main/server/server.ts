@@ -81,42 +81,29 @@ export default class Server {
       res.end();
     });
     this.httpServer.get("/:warehouse/check", (req, res, _next) => {
-      if (
-        !this.warehouses.find(
-          (warehouse, _index, _array) =>
-            warehouse.name === req.params.warehouse,
-        )
-      ) {
-        res.status(404);
-        res.end();
-        return;
-      }
-      res.status(204);
+      res.status(this.hasWarehouse(req.params.warehouse) ? 204 : 404);
       res.end();
     });
 
     // commands
-    this.httpServer.post("/command", (req, res, _next) => {
+    this.httpServer.post("/command", async (req, res, _next) => {
       if (req.contentType() !== "text/plain") {
         res.status(400);
         res.end();
         return;
       }
 
-      // TODO: something with req.body
-
-      res.status(200);
+      const { ok: ok, result: result } = await this.processCommand(
+        null,
+        req.body as string,
+      );
+      res.status(ok ? 200 : 400);
       res.contentType = "text/plain";
-      res.send(req.body as string);
+      res.send(result);
       res.end();
     });
-    this.httpServer.post("/:warehouse/command", (req, res, _next) => {
-      if (
-        !this.warehouses.find(
-          (warehouse, _index, _array) =>
-            warehouse.name === req.params.warehouse,
-        )
-      ) {
+    this.httpServer.post("/:warehouse/command", async (req, res, _next) => {
+      if (!this.hasWarehouse(req.params.warehouse)) {
         res.status(404);
         res.end();
         return;
@@ -128,11 +115,13 @@ export default class Server {
         return;
       }
 
-      // TODO: something with req.body
-
-      res.status(200);
+      const { ok: ok, result: result } = await this.processCommand(
+        req.params.warehouse,
+        req.body as string,
+      );
+      res.status(ok ? 200 : 400);
       res.contentType = "text/plain";
-      res.send(`${req.params.warehouse}: ${req.body as string}`);
+      res.send(result);
       res.end();
     });
 
@@ -160,7 +149,7 @@ export default class Server {
     });
   }
 
-  public start(): Promise<void> {
+  public open(): Promise<void> {
     return new Promise<void>((resolve, _reject) => {
       this.httpServer.listen(PORT, () => {
         resolve();
@@ -172,5 +161,45 @@ export default class Server {
     this.wsServer.close();
     this.httpServer.close();
     fs.writeFileSync(this.databaseFile, JSON.stringify(this.warehouses));
+  }
+
+  public async processCommand(
+    warehouse: string | null,
+    command: string,
+    root: boolean = false,
+  ): Promise<{ ok: boolean; result: string }> {
+    const tokens = command
+      .trim()
+      .split(/\s+/)
+      .filter((token, _index, _array) => token !== "");
+    if (tokens.length === 0) return { ok: true, result: "" };
+
+    switch (tokens[0]) {
+      case "help": {
+        return {
+          ok: true,
+          result:
+            "Commands:\n" +
+            // regular server-processed commands
+            "help - displays this help text\n" +
+            // special terminal-processed commands
+            "exit | quit - exits the program\n" +
+            // root-only commands
+            (root
+              ? "use [warehouse] - switches to the given warehouse, or switches to no warehouse if no warehouse was given\n"
+              : ""),
+        };
+      }
+      default: {
+        return { ok: false, result: `Unknown command ${tokens[0]}\n` };
+      }
+    }
+  }
+
+  public hasWarehouse(warehouse: string): boolean {
+    return (
+      this.warehouses.find((w, _index, _array) => w.name === warehouse) !==
+      undefined
+    );
   }
 }

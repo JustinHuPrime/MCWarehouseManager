@@ -21,18 +21,20 @@ local function commandLine(endpoint)
     io.write("> ")
     local line = io.read()
 
-    if line == "exit" then
+    if line == "exit" or line == "quit" then
       return
     end
 
-    local response, _, failingResponse = http.post(endpoint, line, { ["Content-Type"] = "text/plain" }, false)
-    if response then
-      print(response.readAll())
-    elseif failingResponse then
-      print(failingResponse.readAll())
-    else
-      print("Error: connection to server lost")
-      return
+    if not string.match(line, "^%s*$") then
+      local response, _, failingResponse = http.post(endpoint, line, { ["Content-Type"] = "text/plain" }, false)
+      if response then
+        print(response.readAll())
+      elseif failingResponse then
+        print(failingResponse.readAll())
+      else
+        print("Error: connection to server lost")
+        return
+      end
     end
   end
 end
