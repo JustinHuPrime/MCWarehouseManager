@@ -16,4 +16,78 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-console.log("Hello, world!\n");
+import Server from "./server";
+import * as process from "process";
+import * as readline from "readline";
+
+function printUsage() {
+  process.stdout.write("Usage:\n");
+  process.stdout.write("npm start -- <filename>\n");
+}
+
+if (process.argv.length != 3) {
+  printUsage();
+  process.exit(1);
+}
+
+const rawReadline = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  prompt: "> ",
+});
+const rl = Object.assign(rawReadline, {
+  getLine: (): Promise<string> => {
+    return new Promise((resolve, _reject) => {
+      rawReadline.once("line", resolve);
+    });
+  },
+});
+
+(async () => {
+  process.stdout.write("Minecraft Warehouse Manager v0.1.0\n");
+  process.stdout.write("Copyright 2022 Justin Hu\n");
+
+  process.stdout.write("Initializing server... ");
+  let server: Server;
+  try {
+    server = new Server(process.argv[2] as string);
+  } catch (e) {
+    if (e instanceof Error) process.stdout.write(`${e.message}\n`);
+    process.exit(1);
+  }
+  await server.start();
+  process.stdout.write("done\n");
+
+  while (true) {
+    rl.prompt();
+    const command = await rl.getLine();
+    const tokens = command.split(/\s+/).filter((s) => s !== "");
+
+    if (tokens.length === 0) continue;
+    switch (tokens[0]) {
+      case "exit":
+      case "quit": {
+        if (tokens.length > 1) {
+          process.stdout.write(`expected no arguments, got ${tokens.length}\n`);
+          continue;
+        }
+
+        rl.close();
+        server.close();
+        process.exit(0);
+      }
+      case "help": {
+        process.stdout.write("Commands:\n");
+        process.stdout.write("exit | quit - exit the program\n");
+        process.stdout.write("help - print command usage\n");
+        break;
+      }
+      default: {
+        process.stdout.write(
+          `Unknown command: ${tokens[0]} - use \`help\` to view a list of commands\n`,
+        );
+        break;
+      }
+    }
+  }
+})();

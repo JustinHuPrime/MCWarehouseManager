@@ -16,4 +16,44 @@
 --
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 
-print("Hello, world!")
+local function commandLine(endpoint)
+  while true do
+    io.write("> ")
+    local line = io.read()
+
+    if line == "exit" then
+      return
+    end
+
+    local response, _, failingResponse = http.post(endpoint, line, { ["Content-Type"] = "text/plain" }, false)
+    if response then
+      print(response.readAll())
+    elseif failingResponse then
+      print(failingResponse.readAll())
+    else
+      print("Error: connection to server lost")
+      return
+    end
+  end
+end
+
+if #arg == 1 then
+  local response, _, _ = http.get("http://localhost:8080/" .. arg[1] .. "/check", {}, false)
+  if response == nil then
+    print("Error: couldn't connect to server using warehouse " .. arg[1])
+    return
+  end
+
+  commandLine("http://localhost:8080/" .. arg[1] .. "/command")
+elseif #arg == 0 then
+  local response, _, _ = http.get("http://localhost:8080/check", {}, false)
+  if response == nil then
+    print("Error: couldn't connect to server as generic terminal")
+    return
+  end
+
+  commandLine("http://localhost:8080/command")
+else
+  print("Usage: terminal [warehouse-name]")
+  return
+end
