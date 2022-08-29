@@ -1,0 +1,22 @@
+{
+  "include": ["src/main/**/*.ts"],
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "node",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "forceConsistentCasingInFileNames": true,
+    "preserveConstEnums": true,
+    "rootDir": "src/main",
+    "esModuleInterop": true,
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "outDir": "compiled",
+    "module": "CommonJS"
+  }
+}
