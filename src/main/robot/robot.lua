@@ -32,7 +32,7 @@ ws.send(arg[1])
 
 while true do
   local ok, message = pcall(ws.receive)
-  if ok then
+  if ok and message then
     print("server: " .. message) -- TODO - respond to commands
   else
     print("Error: websocket closed")

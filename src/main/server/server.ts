@@ -184,6 +184,7 @@ export default class Server {
             "Commands:\n" +
             // regular server-processed commands
             "help - displays this help text\n" +
+            "new-warehouse <name> <home-aisle> <aisles> <units> <bins>\n" +
             // special terminal-processed commands
             "exit | quit - exits the program\n" +
             // root-only commands
@@ -191,6 +192,102 @@ export default class Server {
               ? "use [warehouse] - switches to the given warehouse, or switches to no warehouse if no warehouse was given\n"
               : ""),
         };
+      }
+      case "new-warehouse": {
+        if (warehouse !== null) {
+          return {
+            ok: false,
+            result:
+              "new-warehouse cannot be issued from a terminal already attached to a warehouse",
+          };
+        }
+
+        if (tokens.length !== 6) {
+          return {
+            ok: false,
+            result: "new-warehouse requires exactly 5 arguments",
+          };
+        }
+
+        if (!(tokens[1] as string).match(/^\w+$/)) {
+          return {
+            ok: false,
+            result: "new-warehouse requires a valid warehouse name",
+          };
+        }
+
+        if (!(tokens[2] as string).match(/^\d+$/)) {
+          return {
+            ok: false,
+            result: "new-warehouse requires a valid home aisle number",
+          };
+        }
+
+        if (!(tokens[3] as string).match(/^\d+$/)) {
+          return {
+            ok: false,
+            result: "new-warehouse requires a valid number of aisles",
+          };
+        }
+
+        if (!(tokens[4] as string).match(/^\d+$/)) {
+          return {
+            ok: false,
+            result: "new-warehouse requires a valid number of units",
+          };
+        }
+
+        if (!(tokens[5] as string).match(/^\d+$/)) {
+          return {
+            ok: false,
+            result: "new-warehouse requires a valid number of bins",
+          };
+        }
+
+        const homeAisle = Number.parseInt(tokens[2] as string);
+        const aisles = Number.parseInt(tokens[3] as string);
+        const units = Number.parseInt(tokens[4] as string);
+        const bins = Number.parseInt(tokens[5] as string);
+
+        if (aisles === 0) {
+          return {
+            ok: false,
+            result: "new-warehouse requires at least 1 aisle",
+          };
+        }
+
+        if (units === 0) {
+          return {
+            ok: false,
+            result: "new-warehouse requires at least 1 unit",
+          };
+        }
+
+        if (bins === 0) {
+          return {
+            ok: false,
+            result: "new-warehouse requires at least 1 bin",
+          };
+        }
+
+        if (homeAisle === 0 || homeAisle >= aisles) {
+          return {
+            ok: false,
+            result: "new-warehouse requires a valid home aisle number",
+          };
+        }
+
+        this.warehouses.push(
+          model.Warehouse.createEmpty(
+            tokens[1] as string,
+            homeAisle,
+            aisles,
+            units,
+            bins,
+          ),
+        );
+
+        return { ok: true, result: "created" };
       }
       default: {
         return { ok: false, result: `Unknown command ${tokens[0]}\n` };
