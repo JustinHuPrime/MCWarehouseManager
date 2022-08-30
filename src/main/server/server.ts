@@ -34,7 +34,7 @@ class TurtleConnection {
 export default class Server {
   private readonly databaseFile: string;
   private readonly warehouses: Array<model.Warehouse>;
-  private readonly turtles: Map<string, Array<TurtleConnection>>;
+  private readonly turtles: Map<string, TurtleConnection>;
   private readonly httpServer: restify.Server;
   private readonly wsServer: WebSocket.Server;
 
@@ -56,7 +56,7 @@ export default class Server {
       else throw e;
     }
 
-    this.turtles = new Map<string, Array<TurtleConnection>>();
+    this.turtles = new Map<string, TurtleConnection>();
 
     this.httpServer = restify.createServer({});
     this.httpServer.use(restify.plugins.bodyParser());
@@ -139,12 +139,14 @@ export default class Server {
           return;
         }
 
+        // reject duplicate turtles
+        if (this.turtles.has(warehouseName)) {
+          socket.close(4002, "duplicate turtle");
+          return;
+        }
+
         // assign turtle to warehouse
-        if (!this.turtles.has(warehouseName))
-          this.turtles.set(warehouseName, []);
-        (this.turtles.get(warehouseName) as Array<TurtleConnection>).push(
-          new TurtleConnection(socket),
-        );
+        this.turtles.set(warehouseName, new TurtleConnection(socket));
       });
     });
   }
