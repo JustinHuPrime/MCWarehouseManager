@@ -16,15 +16,18 @@
 --
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 
-local id = require("id")
+for _, file in ipairs({
+  "controller.lua",
+  "create-system.lua",
+  "id.lua",
+  "register-storage.lua",
+  "set-system-name.lua",
+  "set-terminal-name.lua",
+  "update.lua"
+}) do
+  if fs.exists(file) then
+    fs.delete(file)
+  end
 
-local res, errMessage, _ = http.post("http://localhost:8080/" .. id.getSystemName() .. "/register-storage",
-  arg[1],
-  { ["Content-Type"] = "text/plain" }
-)
-if res == nil then
-  print("Error: " .. errMessage)
-  return
+  assert(shell.execute("wget", "http://localhost:8080/world/" .. file))
 end
-
-print("Success!")

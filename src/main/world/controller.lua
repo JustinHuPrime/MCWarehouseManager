@@ -15,3 +15,33 @@
 -- along with MCWarehouseManager. If not, see <https://www.gnu.org/licenses/>.
 --
 -- SPDX-License-Identifier: AGPL-3.0-or-later
+
+local id = require("id")
+
+local ws, errMessage = http.websocket("ws://localhost:8080")
+if ws == nil then
+  print("Error: " .. errMessage)
+  return
+end
+
+ws.send(id.getSystemName())
+local message = ws.receive()
+if message == nil then
+  print("Error: could not connect to server")
+  return
+end
+
+print(message)
+
+while true do
+  local message = ws.receive()
+  if message == nil then
+    print("Error: connection lost")
+    return
+  end
+
+  print("Running " .. message)
+  local retval = load(message)()
+  local serialized = textutils.serialize(retval, { compact = false, allow_repetitions = true })
+  ws.send(serialized)
+end

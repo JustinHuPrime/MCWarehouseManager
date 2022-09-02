@@ -25,6 +25,12 @@ describe("fromJSON reversibility", () => {
     "minecraft:redstone_dust",
     64,
   );
+  const ironSword = new model.Item(
+    "Iron Sword",
+    "minecraft:iron_sword",
+    1,
+    "somenbtstringhere",
+  );
   const redstoneDustStack = new model.ItemStack(redstoneDust, 10);
   const storageChest = new model.StorageLocation("minecraft:chest_21", [
     ...Array(1).fill(null),
@@ -78,6 +84,16 @@ describe("fromJSON reversibility", () => {
       .to.deep.equal(
         model.Item.fromJSON(
           JSON.parse(JSON.stringify(model.Item.toJSON(redstoneDust))),
+        ),
+      );
+  });
+
+  it("should be reversible for items with NBT", () => {
+    chai
+      .expect(ironSword)
+      .to.deep.equal(
+        model.Item.fromJSON(
+          JSON.parse(JSON.stringify(model.Item.toJSON(ironSword))),
         ),
       );
   });

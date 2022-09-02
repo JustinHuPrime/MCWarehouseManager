@@ -222,7 +222,7 @@ export class StorageLocation {
    * @param id computercraft id of the storage location
    * @param items stored items
    */
-  public constructor(id: string, items: Array<ItemStack | null>) {
+  public constructor(id: string, items: Array<ItemStack | null> = []) {
     this.id = id;
     this.items = items;
   }
@@ -272,6 +272,10 @@ export class ItemStack {
       count: itemStack.count,
     };
   }
+
+  public toString(): string {
+    return `${this.count}x ${this.item}`;
+  }
 }
 
 /**
@@ -281,20 +285,27 @@ export class Item {
   public readonly displayName: string;
   public readonly id: string;
   public readonly maxCount: number;
+  public readonly nbt: string | null;
 
   /**
    * @param displayName human-readable name of the item
    * @param id minecraft item id - use this for equality comparison
    * @param maxCount max amount that can fit into a stack
    */
-  public constructor(displayName: string, id: string, maxCount: number) {
+  public constructor(
+    displayName: string,
+    id: string,
+    maxCount: number,
+    nbt: string | null = null,
+  ) {
     this.displayName = displayName;
     this.id = id;
     this.maxCount = maxCount;
+    this.nbt = nbt;
   }
 
   public static fromJSON(json: any): Item {
-    return new Item(json.displayName, json.id, json.maxCount);
+    return new Item(json.displayName, json.id, json.maxCount, json.nbt);
   }
 
   public static toJSON(item: Item): any {
@@ -302,6 +313,11 @@ export class Item {
       displayName: item.displayName,
       id: item.id,
       maxCount: item.maxCount,
+      nbt: item.nbt,
     };
+  }
+
+  public toString(): string {
+    return this.displayName;
   }
 }

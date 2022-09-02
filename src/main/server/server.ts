@@ -20,17 +20,94 @@ import * as model from "./model";
 import * as fs from "fs";
 import * as restify from "restify";
 import WebSocket from "ws";
-import { use } from "chai";
+import * as asyncUtil from "./asyncUtil";
 
 const PORT = 8080;
 
+class CommandWebSocket {
+  public socket: WebSocket;
+
+  public constructor(socket: WebSocket) {
+    this.socket = socket;
+  }
+
+  public command(command: string): Promise<string> {
+    this.socket.send(command);
+    return new Promise((resolve, _reject) => {
+      this.socket.once("message", (data) => {
+        resolve(data.toString("utf-8"));
+      });
+    });
+  }
+}
+
 class System {
   public readonly storage: model.StorageSystem;
-  public controller: WebSocket | null;
+  public controller: CommandWebSocket | null;
 
   public constructor(storage: model.StorageSystem) {
     this.storage = storage;
     this.controller = null;
+  }
+
+  public async registerStorage(id: string, res: restify.Response) {
+    if (this.storage.storage.find((location) => location.id === id)) {
+      res.send(409);
+      res.end();
+      return;
+    }
+
+    const location = new model.StorageLocation(id);
+    await this.indexStorage(location);
+    this.storage.storage.push(location);
+
+    res.send(204);
+    res.end();
+  }
+
+  private async indexStorage(storage: model.StorageLocation) {
+    const size = Number.parseInt(
+      await this.controller!.command(
+        `return peripheral.call("${storage.id}", "size")`,
+      ),
+    );
+    storage.items.length = size;
+    storage.items.fill(null);
+    await asyncUtil.forEach(storage.items, async (_value, index, _array) => {
+      const details = await this.controller!.command(
+        `return peripheral.call("${storage.id}", "getItemDetail", ${
+          index + 1
+        })`,
+      );
+
+      if (details === "nil") return;
+
+      const detailLines = details.split("\n");
+      const displayName = detailLines
+        .find((line, _index, _array) => line.match(/displayName = /))!
+        .match(/displayName = "(.+)"/)![1]!;
+      const id = detailLines
+        .find((line, _index, _array) => line.match(/name = /))!
+        .match(/name = "(.+)"/)![1]!;
+      const maxCount = Number.parseInt(
+        detailLines
+          .find((line, _index, _array) => line.match(/maxCount = /))!
+          .match(/maxCount = (\d+)/)![1]!,
+      );
+      const nbt =
+        detailLines
+          .find((line, _index, _array) => line.match(/nbt = /))
+          ?.match(/nbt = "(.+)"/)?.[1] ?? null;
+      const count = Number.parseInt(
+        detailLines
+          .find((line, _index, _array) => line.match(/count = /))!
+          .match(/count = (\d+)/)![1]!,
+      );
+      storage.items[index] = new model.ItemStack(
+        new model.Item(displayName, id, maxCount, nbt),
+        count,
+      );
+    });
   }
 }
 
@@ -106,6 +183,11 @@ export default class Server {
 
     this.wsServer = new WebSocket.Server({ server: this.httpServer.server });
     this.wsServer.on("connection", (socket, _request) => {
+      socket.once("close", (_code, _reason) => {
+        this.storageSystems.forEach((system, _index, _array) => {
+          if (system.controller?.socket === socket) system.controller = null;
+        });
+      });
       socket.once("message", (data, _isBinary) => {
         const system = this.findSystem(data.toString("utf-8"));
         if (system === null) {
@@ -116,7 +198,9 @@ export default class Server {
           return;
         }
 
-        system.controller = socket;
+        system.controller = new CommandWebSocket(socket);
+
+        socket.send("Connection established");
       });
     });
   }
@@ -141,7 +225,7 @@ export default class Server {
     res.end();
   }
 
-  private registerStorage(
+  private async registerStorage(
     req: restify.Request,
     res: restify.Response,
     _next: restify.Next,
@@ -157,17 +241,21 @@ export default class Server {
       return;
     }
 
-    const args = (req.body as string).split(/\s+/);
+    if (typeof req.body !== "string") {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    const args = req.body.split("\n");
     if (args.length !== 1) {
       res.status(400);
       res.end();
       return;
     }
 
-    // TODO
-
-    res.status(201);
-    res.end();
+    await system.registerStorage(args[0] as string, res);
+    this.save();
   }
 
   private registerProcessor(
@@ -186,7 +274,13 @@ export default class Server {
       return;
     }
 
-    const args = (req.body as string).split(/\s+/);
+    if (typeof req.body !== "string") {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    const args = req.body.split("\n");
     if (args.length !== 3) {
       res.status(400);
       res.end();
@@ -211,7 +305,13 @@ export default class Server {
       return;
     }
 
-    const args = (req.body as string).split(/\s+/);
+    if (typeof req.body !== "string") {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    const args = req.body.split("\n");
 
     // TODO
 
@@ -235,7 +335,13 @@ export default class Server {
       return;
     }
 
-    const args = (req.body as string).split(/\s+/);
+    if (typeof req.body !== "string") {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    const args = req.body.split("\n");
     if (args.length !== 1) {
       res.status(400);
       res.end();

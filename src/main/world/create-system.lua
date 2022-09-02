@@ -26,6 +26,6 @@ local res, errMessage, _ = http.post("http://localhost:8080/" .. arg[1] .. "/cre
 if res == nil then
   print("Error: " .. errMessage)
   return
-else
-  print("Success!")
 end
+
+print("Success!")
