@@ -52,7 +52,11 @@ class System {
 
   public async registerStorage(id: string, res: restify.Response) {
     if (this.storage.storage.find((location) => location.id === id)) {
-      res.send(409);
+      res.status(409);
+      res.end();
+      return;
+    } else if (!(await this.checkExistence(id))) {
+      res.status(409);
       res.end();
       return;
     }
@@ -61,8 +65,59 @@ class System {
     await this.indexStorage(location);
     this.storage.storage.push(location);
 
-    res.send(204);
+    res.status(201);
     res.end();
+  }
+
+  public async registerProcessor(
+    process: string,
+    inputBufferId: string,
+    outputBufferId: string,
+    res: restify.Response,
+  ) {
+    if (
+      this.storage.storage.find((location) => location.id === inputBufferId)
+    ) {
+      res.status(409);
+      res.end();
+      return;
+    } else if (!(await this.checkExistence(inputBufferId))) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    if (
+      this.storage.storage.find((location) => location.id === outputBufferId)
+    ) {
+      res.status(409);
+      res.end();
+      return;
+    } else if (!(await this.checkExistence(outputBufferId))) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    const inputBuffer = new model.StorageLocation(inputBufferId);
+    await this.indexStorage(inputBuffer);
+
+    const outputBuffer = new model.StorageLocation(outputBufferId);
+    await this.indexStorage(outputBuffer);
+
+    const processor = new model.Processor(process, inputBuffer, outputBuffer);
+    this.storage.processors.push(processor);
+
+    res.status(201);
+    res.end();
+  }
+
+  private async checkExistence(id: string): Promise<boolean> {
+    return (
+      (await this.controller!.command(
+        `return peripheral.isPresent("${id}")`,
+      )) === "true"
+    );
   }
 
   private async indexStorage(storage: model.StorageLocation) {
@@ -254,11 +309,11 @@ export default class Server {
       return;
     }
 
-    await system.registerStorage(args[0] as string, res);
+    await system.registerStorage(args[0]!, res);
     this.save();
   }
 
-  private registerProcessor(
+  private async registerProcessor(
     req: restify.Request,
     res: restify.Response,
     _next: restify.Next,
@@ -287,10 +342,8 @@ export default class Server {
       return;
     }
 
-    // TODO
-
-    res.status(201);
-    res.end();
+    await system.registerProcessor(args[0]!, args[1]!, args[2]!, res);
+    this.save();
   }
 
   private registerRecipe(

@@ -36,7 +36,7 @@ if (process.argv.length != 3) {
   process.stdout.write("Initializing server... ");
   let server: Server;
   try {
-    server = new Server(process.argv[2] as string);
+    server = new Server(process.argv[2]!);
   } catch (e) {
     if (e instanceof Error) process.stdout.write(`${e.message}\n`);
     process.exit(1);

@@ -18,29 +18,13 @@
 
 local id = require("id")
 
-local ws, errMessage = http.websocket("ws://localhost:8080")
-if ws == nil then
+local res, errMessage, _ = http.post("http://localhost:8080/" .. id.getSystemName() .. "/register-processor",
+  arg[1] .. "\n" .. arg[2] .. "\n" .. arg[3],
+  { ["Content-Type"] = "text/plain" }
+)
+if res == nil then
   print("Error: " .. errMessage)
   return
 end
 
-ws.send(id.getSystemName())
-local message = ws.receive()
-if message == nil then
-  print("Error: could not connect to server")
-  return
-end
-
-print(message)
-
-while true do
-  local message = ws.receive()
-  if message == nil then
-    print("Error: connection lost")
-    return
-  end
-
-  local retval = load(message)()
-  local serialized = textutils.serialize(retval, { compact = false, allow_repetitions = true })
-  ws.send(serialized)
-end
+print("Success!")

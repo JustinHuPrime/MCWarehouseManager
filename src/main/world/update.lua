@@ -20,6 +20,7 @@ for _, file in ipairs({
   "controller.lua",
   "create-system.lua",
   "id.lua",
+  "register-processor.lua",
   "register-storage.lua",
   "set-system-name.lua",
   "set-terminal-name.lua",
