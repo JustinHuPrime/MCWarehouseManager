@@ -16,250 +16,233 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import * as sizing from "./inventorySizing";
-
 /**
- * A warehouse
- *
- * Consists of some number of aisles
+ * A storage system
  */
-export class Warehouse {
+export class StorageSystem {
   public readonly name: string;
-  public readonly aisles: Array<Aisle>;
-  public readonly homeAisle: number;
+  public readonly storage: Array<StorageLocation>;
+  public readonly processors: Array<Processor>;
+  public readonly recipes: Array<Recipe>;
+  public readonly terminals: Array<Terminal>;
 
-  public constructor(name: string, aisles: Array<Aisle>, homeAisle: number) {
-    if (typeof name !== "string")
-      throw new Error("Warehouse name must be a string");
-    if (!Array.isArray(aisles))
-      throw new Error("Warehouse aisles must be an array");
-    if (aisles.length === 0)
-      throw new Error("Warehouse aisles have at least one aisle");
-    if (!Number.isSafeInteger(homeAisle))
-      throw new Error("Warehouse homeAisle must be a safe integer");
-    if (homeAisle < 0 || homeAisle >= aisles.length)
-      throw new Error(
-        "Warehouse homeAisle must be in range [0, aisles.length)",
-      );
-
-    this.name = name;
-    this.aisles = aisles;
-    this.homeAisle = homeAisle;
-  }
-
-  public static fromJSON(json: any): Warehouse {
-    return new Warehouse(
-      json.name,
-      (json.aisles as Array<any>).map((aisle, _index, _array) =>
-        Aisle.fromJSON(aisle),
-      ),
-      json.homeAisle,
-    );
-  }
-
-  public static createEmpty(
+  /**
+   * @param name url name of the system
+   * @param storage storage chests/barrels
+   * @param processors processing machines
+   * @param recipes processing recipes
+   * @param terminals access terminals
+   */
+  public constructor(
     name: string,
-    homeAisle: number,
-    aisles: number,
-    units: number,
-    bins: number,
+    storage: Array<StorageLocation> = [],
+    processors: Array<Processor> = [],
+    recipes: Array<Recipe> = [],
+    terminals: Array<Terminal> = [],
   ) {
-    return new Warehouse(
-      name,
-      [...new Array(aisles)].map(
-        (_value, _index, _array) =>
-          new Aisle(
-            [...new Array(units)].map(
-              (_value, _index, _array) =>
-                new Unit(
-                  [...new Array(bins)].map(
-                    (_value, _index, _array) => new EmptyBin(),
-                  ),
-                ),
-            ),
-            [...new Array(units)].map(
-              (_value, _index, _array) =>
-                new Unit(
-                  [...new Array(bins)].map(
-                    (_value, _index, _array) => new EmptyBin(),
-                  ),
-                ),
-            ),
-          ),
-      ),
-      homeAisle,
-    );
-  }
-}
-
-/**
- * An aisle
- *
- * Consists of a left half and right half, each containing the same number of units
- */
-export class Aisle {
-  public readonly left: Array<Unit>;
-  public readonly right: Array<Unit>;
-
-  public constructor(left: Array<Unit>, right: Array<Unit>) {
-    if (!Array.isArray(left)) throw new Error("Aisle left must be an array");
-    if (left.length === 0)
-      throw new Error("Aisle left must have at least one unit");
-    if (!Array.isArray(right)) throw new Error("Aisle right must be an array");
-    if (right.length === 0)
-      throw new Error("Aisle right must have at least one unit");
-    if (left.length !== right.length)
-      throw new Error(
-        "Aisle left and right must have the same number of units",
-      );
-
-    this.left = left;
-    this.right = right;
-  }
-
-  public static fromJSON(json: any): Aisle {
-    return new Aisle(
-      (json.left as Array<any>).map((unit, _index, _array) =>
-        Unit.fromJSON(unit),
-      ),
-      (json.right as Array<any>).map((unit, _index, _array) =>
-        Unit.fromJSON(unit),
-      ),
-    );
-  }
-}
-
-/**
- * A unit
- *
- * Consists of a number of bins
- */
-export class Unit {
-  public readonly bins: Array<Bin>;
-
-  public constructor(bins: Array<Bin>) {
-    if (!Array.isArray(bins)) throw new Error("Unit bins must be an array");
-    if (bins.length === 0) throw new Error("Unit bins have at least one bin");
-
-    this.bins = bins;
-  }
-
-  public static fromJSON(json: any): Unit {
-    return new Unit(
-      (json.bins as Array<any>).map((bin, _index, _array) => Bin.fromJSON(bin)),
-    );
-  }
-}
-
-/**
- * A bin
- */
-export abstract class Bin {
-  public static fromJSON(json: any): Bin {
-    switch (Object.getOwnPropertyNames(json).length) {
-      case 0: {
-        return new EmptyBin();
-      }
-      case 1: {
-        return new MixedBin(
-          (json.stacks as Array<any>).map((stack, _index, _array) =>
-            ItemStack.fromJSON(stack),
-          ),
-        );
-      }
-      case 2: {
-        return new BulkBin(Item.fromJSON(json.item), json.count);
-      }
-      default: {
-        throw new Error("Invalid bin, could not deduce type");
-      }
-    }
-  }
-}
-
-/**
- * An unallocated bin
- */
-export class EmptyBin extends Bin {}
-
-/**
- * A bulk storage bin
- *
- * Contains up to CHEST_SIZE * item.maxCount items
- */
-export class BulkBin extends Bin {
-  public readonly item: Item;
-  public count: number;
-
-  public get capacity(): number {
-    return sizing.CHEST_SIZE * this.item.maxCount;
-  }
-
-  public constructor(item: Item, count: number) {
-    super();
-
-    if (typeof item !== "object")
-      throw new Error("Bulk bin item must be an object");
-    if (!Number.isSafeInteger(count))
-      throw new Error("Bulk bin count must be an integer");
-    if (count < 1) throw new Error("count must be at least 1");
-    if (count > sizing.CHEST_SIZE * item.maxCount)
-      throw new Error(
-        "Bulk bin count must be less than or equal to the capacity",
-      );
-
-    this.item = item;
-    this.count = count;
-  }
-}
-
-/**
- * A mixed storage bin
- *
- * Contains up to ROBOT_SIZE individual stacks
- */
-export class MixedBin extends Bin {
-  public readonly stacks: Array<ItemStack | null>;
-
-  public constructor(stacks: Array<ItemStack | null>) {
-    super();
-
-    if (!Array.isArray(stacks))
-      throw new Error("Mixed bin stacks must be an array");
-    if (stacks.length !== sizing.ROBOT_SIZE)
-      throw new Error(
-        `Mixed bin must have exactly ${sizing.ROBOT_SIZE} stacks`,
-      );
-    if (stacks.every((stack, _index, _array) => stack === null))
-      throw new Error("Mixed bin must have at least one stack");
-
-    this.stacks = stacks;
-  }
-}
-
-/**
- * An item
- */
-export class Item {
-  public readonly displayName: string;
-  public readonly name: string;
-  public readonly maxCount: number;
-
-  public constructor(displayName: string, name: string, maxCount: number) {
-    if (typeof displayName !== "string")
-      throw new Error("Item display name must be a string");
-    if (typeof name !== "string") throw new Error("Item name must be a string");
-    if (!Number.isSafeInteger(maxCount))
-      throw new Error("Item maxCount must be an integer");
-    if (maxCount < 1) throw new Error("Item maxCount must be at least 1");
-
-    this.displayName = displayName;
     this.name = name;
-    this.maxCount = maxCount;
+    this.storage = storage;
+    this.processors = processors;
+    this.recipes = recipes;
+    this.terminals = terminals;
   }
 
-  public static fromJSON(json: any): Item {
-    return new Item(json.displayName, json.name, json.maxCount);
+  public static fromJSON(json: any): StorageSystem {
+    return new StorageSystem(
+      json.name,
+      json.storage.map(StorageLocation.fromJSON),
+      json.processors.map(Processor.fromJSON),
+      json.recipes.map(Recipe.fromJSON),
+      json.terminals.map(Terminal.fromJSON),
+    );
+  }
+
+  public static toJSON(storage: StorageSystem): any {
+    return {
+      name: storage.name,
+      storage: storage.storage.map(StorageLocation.toJSON),
+      processors: storage.processors.map(Processor.toJSON),
+      recipes: storage.recipes.map(Recipe.toJSON),
+      terminals: storage.terminals.map(Terminal.toJSON),
+    };
+  }
+}
+
+/**
+ * An access terminal
+ */
+export class Terminal {
+  public readonly name: string;
+  public readonly storage: StorageLocation;
+
+  /**
+   * @param name human-readable name of the terminal
+   * @param storage storage location associated with the terminal; not usable for actual storage
+   */
+  public constructor(name: string, storage: StorageLocation) {
+    this.name = name;
+    this.storage = storage;
+  }
+
+  public static fromJSON(json: any): Terminal {
+    return new Terminal(json.name, StorageLocation.fromJSON(json.storage));
+  }
+
+  public static toJSON(terminal: Terminal): any {
+    return {
+      name: terminal.name,
+      storage: StorageLocation.toJSON(terminal.storage),
+    };
+  }
+}
+
+/**
+ * A recipe
+ */
+export class Recipe {
+  public readonly process: string;
+  public readonly inputs: Array<ItemStack>;
+  public readonly outputs: Array<RecipeOutput>;
+
+  public constructor(
+    process: string,
+    inputs: Array<ItemStack>,
+    outputs: Array<RecipeOutput>,
+  ) {
+    this.process = process;
+    this.inputs = inputs;
+    this.outputs = outputs;
+  }
+
+  public static fromJSON(json: any): Recipe {
+    return new Recipe(
+      json.process,
+      json.inputs.map(ItemStack.fromJSON),
+      json.outputs.map(RecipeOutput.fromJSON),
+    );
+  }
+
+  public static toJSON(recipe: Recipe): any {
+    return {
+      process: recipe.process,
+      inputs: recipe.inputs.map(ItemStack.toJSON),
+      outputs: recipe.outputs.map(RecipeOutput.toJSON),
+    };
+  }
+}
+
+/**
+ * A recipe output specification
+ */
+export class RecipeOutput {
+  public readonly outputItem: ItemStack;
+  public readonly minOutputStock: number;
+  public readonly maxOutputStock: number;
+
+  /**
+   * @param outputItem produced item
+   * @param minOutputStock will trigger processing if it falls below this amount
+   * @param maxOutputStock will make enough to bring it to this amount
+   */
+  public constructor(
+    outputItem: ItemStack,
+    minOutputStock: number,
+    maxOutputStock: number,
+  ) {
+    this.outputItem = outputItem;
+    this.minOutputStock = minOutputStock;
+    this.maxOutputStock = maxOutputStock;
+  }
+
+  public static fromJSON(json: any): RecipeOutput {
+    return new RecipeOutput(
+      ItemStack.fromJSON(json.outputItem),
+      json.minOutputStock,
+      json.maxOutputStock,
+    );
+  }
+
+  public static toJSON(recipeOutput: RecipeOutput): any {
+    return {
+      outputItem: ItemStack.toJSON(recipeOutput.outputItem),
+      minOutputStock: recipeOutput.minOutputStock,
+      maxOutputStock: recipeOutput.maxOutputStock,
+    };
+  }
+}
+
+/**
+ * A processing location
+ */
+export class Processor {
+  public readonly process: string;
+  public readonly inputBuffer: StorageLocation;
+  public readonly outputBuffer: StorageLocation;
+
+  /**
+   * @param process kind of process supported (e.g. smelting, macerating)
+   * @param inputBuffer where to put inputs
+   * @param outputBuffer where to get outputs from (counts as withdraw-only storage)
+   */
+  public constructor(
+    process: string,
+    inputBuffer: StorageLocation,
+    outputBuffer: StorageLocation,
+  ) {
+    this.process = process;
+    this.inputBuffer = inputBuffer;
+    this.outputBuffer = outputBuffer;
+  }
+
+  public static fromJSON(json: any): Processor {
+    return new Processor(
+      json.process,
+      StorageLocation.fromJSON(json.inputBuffer),
+      StorageLocation.fromJSON(json.outputBuffer),
+    );
+  }
+
+  public static toJSON(processor: Processor): any {
+    return {
+      process: processor.process,
+      inputBuffer: StorageLocation.toJSON(processor.inputBuffer),
+      outputBuffer: StorageLocation.toJSON(processor.outputBuffer),
+    };
+  }
+}
+
+/**
+ * A storage bin
+ */
+export class StorageLocation {
+  public readonly id: string;
+  public readonly items: Array<ItemStack | null>;
+
+  /**
+   * @param id computercraft id of the storage location
+   * @param items stored items
+   */
+  public constructor(id: string, items: Array<ItemStack | null>) {
+    this.id = id;
+    this.items = items;
+  }
+
+  public static fromJSON(json: any): StorageLocation {
+    return new StorageLocation(
+      json.id,
+      (json.items as Array<any>).map((stack) =>
+        stack == null ? null : ItemStack.fromJSON(stack),
+      ),
+    );
+  }
+
+  public static toJSON(storageLocation: StorageLocation): any {
+    return {
+      id: storageLocation.id,
+      items: storageLocation.items.map((stack) =>
+        stack == null ? null : ItemStack.toJSON(stack),
+      ),
+    };
   }
 }
 
@@ -270,20 +253,55 @@ export class ItemStack {
   public readonly item: Item;
   public count: number;
 
+  /**
+   * @param item which item this stack stores
+   * @param count how many are in the stack
+   */
   public constructor(item: Item, count: number) {
-    if (typeof item !== "object")
-      throw new Error("ItemStack item must be an object");
-    if (!Number.isSafeInteger(count))
-      throw new Error("ItemStack count must be an integer");
-    if (count < 1) throw new Error("ItemStack count must be greater than 0");
-    if (count > item.maxCount)
-      throw new Error("ItemStack count must be less than or equal to maxCount");
-
     this.item = item;
     this.count = count;
   }
 
   public static fromJSON(json: any): ItemStack {
     return new ItemStack(Item.fromJSON(json.item), json.count);
+  }
+
+  public static toJSON(itemStack: ItemStack): any {
+    return {
+      item: Item.toJSON(itemStack.item),
+      count: itemStack.count,
+    };
+  }
+}
+
+/**
+ * An item
+ */
+export class Item {
+  public readonly displayName: string;
+  public readonly id: string;
+  public readonly maxCount: number;
+
+  /**
+   * @param displayName human-readable name of the item
+   * @param id minecraft item id - use this for equality comparison
+   * @param maxCount max amount that can fit into a stack
+   */
+  public constructor(displayName: string, id: string, maxCount: number) {
+    this.displayName = displayName;
+    this.id = id;
+    this.maxCount = maxCount;
+  }
+
+  public static fromJSON(json: any): Item {
+    return new Item(json.displayName, json.id, json.maxCount);
+  }
+
+  public static toJSON(item: Item): any {
+    return {
+      displayName: item.displayName,
+      id: item.id,
+      maxCount: item.maxCount,
+    };
   }
 }

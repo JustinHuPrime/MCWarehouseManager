@@ -16,26 +16,6 @@
 --
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 
-if #arg ~= 1 then
-  print("Usage: robot <warehouse-name>")
-  return
-end
+local id = require("id")
 
-local response, _, _ = http.get("http://localhost:8080/" .. arg[1] .. "/check", {}, false)
-if response == nil then
-  print("Error: couldn't connect to server using warehouse " .. arg[1])
-  return
-end
-
-local ws = http.websocket("ws://localhost:8080")
-ws.send(arg[1])
-
-while true do
-  local ok, message = pcall(ws.receive)
-  if ok and message then
-    print("server: " .. message) -- TODO - respond to commands
-  else
-    print("Error: websocket closed")
-    return
-  end
-end
+id.setSystemName(arg[1])

@@ -18,7 +18,6 @@
 
 import Server from "./server";
 import * as process from "process";
-import * as readline from "readline";
 
 function printUsage() {
   process.stdout.write("Usage:\n");
@@ -29,19 +28,6 @@ if (process.argv.length != 3) {
   printUsage();
   process.exit(1);
 }
-
-const rawReadline = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  prompt: "> ",
-});
-const rl = Object.assign(rawReadline, {
-  getLine: (): Promise<string> => {
-    return new Promise((resolve, _reject) => {
-      rawReadline.once("line", resolve);
-    });
-  },
-});
 
 (async () => {
   process.stdout.write("Minecraft Warehouse Manager v0.1.0\n");
@@ -57,42 +43,4 @@ const rl = Object.assign(rawReadline, {
   }
   await server.open();
   process.stdout.write("done\n");
-
-  let warehouse: string | null = null;
-
-  while (true) {
-    rl.prompt();
-    const command = await rl.getLine();
-
-    if (command.trim() === "") {
-      continue;
-    }
-
-    if (command === "exit" || command === "quit") {
-      rl.close();
-      server.close();
-      process.exit(0);
-    } else if (command === "use") {
-      warehouse = null;
-      rl.setPrompt("> ");
-    } else if (command.match(/^use \w+$/)) {
-      const newWarehouse = (
-        command.match(/^use (\w+)$/) as RegExpMatchArray
-      )[1] as string;
-      if (!server.hasWarehouse(newWarehouse)) {
-        process.stdout.write(`No warehouse named ${newWarehouse} exists\n`);
-        continue;
-      }
-
-      warehouse = newWarehouse;
-      rl.setPrompt(`${warehouse}> `);
-    } else {
-      const { ok: _ok, result: result } = await server.processCommand(
-        warehouse,
-        command,
-        true,
-      );
-      process.stdout.write(result);
-    }
-  }
 })();

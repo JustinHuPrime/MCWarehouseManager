@@ -20,135 +20,340 @@ import * as model from "./model";
 import * as fs from "fs";
 import * as restify from "restify";
 import WebSocket from "ws";
+import { use } from "chai";
 
 const PORT = 8080;
 
-class TurtleConnection {
-  public readonly socket: WebSocket;
+class System {
+  public readonly storage: model.StorageSystem;
+  public controller: WebSocket | null;
 
-  public constructor(socket: WebSocket) {
-    this.socket = socket;
+  public constructor(storage: model.StorageSystem) {
+    this.storage = storage;
+    this.controller = null;
   }
 }
 
 export default class Server {
   private readonly databaseFile: string;
-  private readonly warehouses: Array<model.Warehouse>;
-  private readonly turtles: Map<string, TurtleConnection>;
+  private readonly storageSystems: Array<System>;
+
   private readonly httpServer: restify.Server;
   private readonly wsServer: WebSocket.Server;
 
   public constructor(databaseFile: string) {
     this.databaseFile = databaseFile;
+    if (!fs.existsSync(databaseFile))
+      fs.writeFileSync(databaseFile, JSON.stringify([]));
+    this.storageSystems = JSON.parse(fs.readFileSync(databaseFile, "utf-8"))
+      .map(model.StorageSystem.fromJSON)
+      .map((storage: model.StorageSystem) => new System(storage));
 
-    if (!fs.existsSync(databaseFile)) fs.writeFileSync(databaseFile, "[]");
-    const parsed: unknown = JSON.parse(fs.readFileSync(databaseFile, "utf8"));
-
-    try {
-      if (!Array.isArray(parsed))
-        throw new Error("Database file must be an array");
-      this.warehouses = parsed.map((warehouse, _index, _array) =>
-        model.Warehouse.fromJSON(warehouse),
-      );
-    } catch (e: unknown) {
-      if (e instanceof Error)
-        throw new Error(`Database file is invalid: ${e.message}`);
-      else throw e;
-    }
-
-    this.turtles = new Map<string, TurtleConnection>();
-
-    this.httpServer = restify.createServer({});
+    this.httpServer = restify.createServer();
     this.httpServer.use(restify.plugins.bodyParser());
+    this.httpServer.use(
+      restify.plugins.queryParser({
+        mapParams: false,
+        parseArrays: false,
+      }),
+    );
 
-    // serve lua files
-    this.httpServer.get("/robot.lua", (_req, res, _next) => {
-      res.status(200);
-      res.contentType = "text/plain";
-      res.send(fs.readFileSync("./src/main/robot/robot.lua"));
-      res.end();
-    });
-    this.httpServer.get("/terminal.lua", (_req, res, _next) => {
-      res.status(200);
-      res.contentType = "text/plain";
-      res.send(fs.readFileSync("./src/main/terminal/terminal.lua"));
-      res.end();
-    });
+    // static files
+    this.httpServer.get(
+      "/world/*",
+      restify.plugins.serveStatic({
+        directory: "src/main/world",
+        appendRequestPath: false,
+      }),
+    );
 
-    // liveness checking
-    this.httpServer.get("/check", (_req, res, _next) => {
-      res.status(204);
-      res.end();
-    });
-    this.httpServer.get("/:warehouse/check", (req, res, _next) => {
-      res.status(this.hasWarehouse(req.params.warehouse) ? 204 : 404);
-      res.end();
-    });
+    // system management
+    this.httpServer.post(
+      "/:system/create-system",
+      this.createSystem.bind(this),
+    );
+    this.httpServer.post(
+      "/:system/register-storage",
+      this.registerStorage.bind(this),
+    );
+    this.httpServer.post(
+      "/:system/register-processor",
+      this.registerProcessor.bind(this),
+    );
+    this.httpServer.post(
+      "/:system/register-recipe",
+      this.registerRecipe.bind(this),
+    );
+    this.httpServer.post(
+      "/:system/register-terminal",
+      this.registerTerminal.bind(this),
+    );
+    this.httpServer.post("/:system/reindex", this.reindex.bind(this));
+    this.httpServer.post(
+      "/:system/run-processors",
+      this.runProcessors.bind(this),
+    );
 
-    // commands
-    this.httpServer.post("/command", async (req, res, _next) => {
-      if (req.contentType() !== "text/plain") {
-        res.status(400);
-        res.end();
-        return;
-      }
+    // terminal commands
+    this.httpServer.post(
+      "/:system/:terminal/withdraw",
+      this.withdraw.bind(this),
+    );
+    this.httpServer.post("/:system/:terminal/deposit", this.deposit.bind(this));
 
-      const { ok: ok, result: result } = await this.processCommand(
-        null,
-        req.body as string,
-      );
-      res.status(ok ? 200 : 400);
-      res.contentType = "text/plain";
-      res.send(result);
-      res.end();
-    });
-    this.httpServer.post("/:warehouse/command", async (req, res, _next) => {
-      if (!this.hasWarehouse(req.params.warehouse)) {
-        res.status(404);
-        res.end();
-        return;
-      }
-
-      if (req.contentType() !== "text/plain") {
-        res.status(400);
-        res.end();
-        return;
-      }
-
-      const { ok: ok, result: result } = await this.processCommand(
-        req.params.warehouse,
-        req.body as string,
-      );
-      res.status(ok ? 200 : 400);
-      res.contentType = "text/plain";
-      res.send(result);
-      res.end();
-    });
+    // info
+    this.httpServer.get("/:system/inventory", this.inventory.bind(this));
 
     this.wsServer = new WebSocket.Server({ server: this.httpServer.server });
     this.wsServer.on("connection", (socket, _request) => {
       socket.once("message", (data, _isBinary) => {
-        const warehouseName = data.toString("utf8");
-        const warehouse = this.warehouses.find(
-          (warehouse, _index, _array) => warehouse.name === warehouseName,
-        );
-
-        // ignore invalid warehouse names
-        if (warehouse === undefined) {
-          socket.close(4001, "invalid warehouse name");
+        const system = this.findSystem(data.toString("utf-8"));
+        if (system === null) {
+          socket.close(4001, "Invalid system name");
+          return;
+        } else if (system.controller !== null) {
+          socket.close(4002, "System already has a controller");
           return;
         }
 
-        // reject duplicate turtles
-        if (this.turtles.has(warehouseName)) {
-          socket.close(4002, "duplicate turtle");
-          return;
-        }
-
-        // assign turtle to warehouse
-        this.turtles.set(warehouseName, new TurtleConnection(socket));
+        system.controller = socket;
       });
     });
+  }
+
+  private createSystem(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ): void {
+    const system = this.findSystem(req.params.system);
+    if (system !== null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    const storage = new model.StorageSystem(req.params.system);
+    this.storageSystems.push(new System(storage));
+    this.save();
+
+    res.status(201);
+    res.end();
+  }
+
+  private registerStorage(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    const args = (req.body as string).split(/\s+/);
+    if (args.length !== 1) {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(201);
+    res.end();
+  }
+
+  private registerProcessor(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    const args = (req.body as string).split(/\s+/);
+    if (args.length !== 3) {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(201);
+    res.end();
+  }
+
+  private registerRecipe(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    }
+
+    const args = (req.body as string).split(/\s+/);
+
+    // TODO
+
+    res.status(201);
+    res.end();
+  }
+
+  private registerTerminal(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    const args = (req.body as string).split(/\s+/);
+    if (args.length !== 1) {
+      res.status(400);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(201);
+    res.end();
+  }
+
+  private reindex(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(204);
+    res.end();
+  }
+
+  private runProcessors(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(204);
+    res.end();
+  }
+
+  private withdraw(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(204);
+    res.end();
+  }
+
+  private deposit(
+    req: restify.Request,
+    res: restify.Response,
+    _next: restify.Next,
+  ) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    } else if (system.controller === null) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(204);
+    res.end();
+  }
+
+  private inventory(req: restify.Request, res: restify.Response) {
+    const system = this.findSystem(req.params.system);
+    if (system === null) {
+      res.status(404);
+      res.end();
+      return;
+    }
+
+    // TODO
+
+    res.status(200);
+    res.end();
+  }
+
+  private findSystem(name: string): System | null {
+    return (
+      this.storageSystems.find((system) => system.storage.name === name) ?? null
+    );
   }
 
   public open(): Promise<void> {
@@ -162,143 +367,12 @@ export default class Server {
   public close() {
     this.wsServer.close();
     this.httpServer.close();
-    fs.writeFileSync(this.databaseFile, JSON.stringify(this.warehouses));
   }
 
-  public async processCommand(
-    warehouse: string | null,
-    command: string,
-    root: boolean = false,
-  ): Promise<{ ok: boolean; result: string }> {
-    const tokens = command
-      .trim()
-      .split(/\s+/)
-      .filter((token, _index, _array) => token !== "");
-    if (tokens.length === 0) return { ok: true, result: "" };
-
-    switch (tokens[0]) {
-      case "help": {
-        return {
-          ok: true,
-          result:
-            "Commands:\n" +
-            // regular server-processed commands
-            "help - displays this help text\n" +
-            "new-warehouse <name> <home-aisle> <aisles> <units> <bins>\n" +
-            // special terminal-processed commands
-            "exit | quit - exits the program\n" +
-            // root-only commands
-            (root
-              ? "use [warehouse] - switches to the given warehouse, or switches to no warehouse if no warehouse was given\n"
-              : ""),
-        };
-      }
-      case "new-warehouse": {
-        if (warehouse !== null) {
-          return {
-            ok: false,
-            result:
-              "new-warehouse cannot be issued from a terminal already attached to a warehouse",
-          };
-        }
-
-        if (tokens.length !== 6) {
-          return {
-            ok: false,
-            result: "new-warehouse requires exactly 5 arguments",
-          };
-        }
-
-        if (!(tokens[1] as string).match(/^\w+$/)) {
-          return {
-            ok: false,
-            result: "new-warehouse requires a valid warehouse name",
-          };
-        }
-
-        if (!(tokens[2] as string).match(/^\d+$/)) {
-          return {
-            ok: false,
-            result: "new-warehouse requires a valid home aisle number",
-          };
-        }
-
-        if (!(tokens[3] as string).match(/^\d+$/)) {
-          return {
-            ok: false,
-            result: "new-warehouse requires a valid number of aisles",
-          };
-        }
-
-        if (!(tokens[4] as string).match(/^\d+$/)) {
-          return {
-            ok: false,
-            result: "new-warehouse requires a valid number of units",
-          };
-        }
-
-        if (!(tokens[5] as string).match(/^\d+$/)) {
-          return {
-            ok: false,
-            result: "new-warehouse requires a valid number of bins",
-          };
-        }
-
-        const homeAisle = Number.parseInt(tokens[2] as string);
-        const aisles = Number.parseInt(tokens[3] as string);
-        const units = Number.parseInt(tokens[4] as string);
-        const bins = Number.parseInt(tokens[5] as string);
-
-        if (aisles === 0) {
-          return {
-            ok: false,
-            result: "new-warehouse requires at least 1 aisle",
-          };
-        }
-
-        if (units === 0) {
-          return {
-            ok: false,
-            result: "new-warehouse requires at least 1 unit",
-          };
-        }
-
-        if (bins === 0) {
-          return {
-            ok: false,
-            result: "new-warehouse requires at least 1 bin",
-          };
-        }
-
-        if (homeAisle === 0 || homeAisle >= aisles) {
-          return {
-            ok: false,
-            result: "new-warehouse requires a valid home aisle number",
-          };
-        }
-
-        this.warehouses.push(
-          model.Warehouse.createEmpty(
-            tokens[1] as string,
-            homeAisle,
-            aisles,
-            units,
-            bins,
-          ),
-        );
-
-        return { ok: true, result: "created" };
-      }
-      default: {
-        return { ok: false, result: `Unknown command ${tokens[0]}\n` };
-      }
-    }
-  }
-
-  public hasWarehouse(warehouse: string): boolean {
-    return (
-      this.warehouses.find((w, _index, _array) => w.name === warehouse) !==
-      undefined
+  public save() {
+    fs.writeFileSync(
+      this.databaseFile,
+      JSON.stringify(this.storageSystems.map((system) => system.storage)),
     );
   }
 }

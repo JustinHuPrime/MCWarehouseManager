@@ -6,7 +6,7 @@
   "scripts": {
     "cover": "nyc --reporter text --reporter html npm run test",
     "build": "tsc",
-    "test": "mocha --require ts-node/register --timeout 10000 ./test/**/*.spec.ts",
+    "test": "mocha --require ts-node/register --timeout 10000 ./src/test/**/*.spec.ts",
     "pretty": "prettier --write \"src/**/*.ts\"",
     "clean": "rm -rf compiled public_html/scripts",
     "start": "node compiled/server/main.js"
