@@ -52,6 +52,7 @@ class System {
   }
 
   public async registerStorage(id: string, res: restify.Response) {
+    // TODO: this should search all storage locations for the id
     if (this.storage.storage.find((location) => location.id === id)) {
       res.status(409);
       res.end();
@@ -120,6 +121,29 @@ class System {
     res: restify.Response,
   ) {
     this.storage.recipes.push(new model.Recipe(process, inputs, outputs));
+
+    res.status(201);
+    res.end();
+  }
+
+  public async registerTerminal(
+    name: string,
+    id: string,
+    res: restify.Response,
+  ) {
+    if (this.storage.storage.find((location) => location.id === id)) {
+      res.status(409);
+      res.end();
+      return;
+    } else if (!(await this.checkExistence(id))) {
+      res.status(409);
+      res.end();
+      return;
+    }
+
+    const location = new model.StorageLocation(id);
+    await this.indexStorage(location);
+    this.storage.terminals.push(new model.Terminal(name, location));
 
     res.status(201);
     res.end();
@@ -410,7 +434,7 @@ export default class Server {
     system.registerRecipe(args[0]!, inputs, outputs, res);
   }
 
-  private registerTerminal(
+  private async registerTerminal(
     req: restify.Request,
     res: restify.Response,
     _next: restify.Next,
@@ -439,10 +463,7 @@ export default class Server {
       return;
     }
 
-    // TODO
-
-    res.status(201);
-    res.end();
+    await system.registerTerminal(args[0]!, args[1]!, res);
   }
 
   private reindex(
