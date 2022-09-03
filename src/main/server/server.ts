@@ -148,6 +148,65 @@ class System {
     res.end();
   }
 
+  public async reindex() {
+    const toDeleteStorage: Array<model.StorageLocation> = [];
+    await asyncUtil.forEach(
+      this.storage.storage,
+      async (location, _index, _array) => {
+        if (!(await this.checkExistence(location.id))) {
+          toDeleteStorage.push(location);
+        } else {
+          await this.indexStorage(location);
+        }
+      },
+    );
+    toDeleteStorage.forEach((location, _index, _array) => {
+      this.storage.storage.splice(this.storage.storage.indexOf(location), 1);
+    });
+
+    const toDeleteProcessors: Array<model.Processor> = [];
+    await asyncUtil.forEach(
+      this.storage.processors,
+      async (processor, _index, _array) => {
+        if (
+          !(
+            (await this.checkExistence(processor.inputBuffer.id)) &&
+            (await this.checkExistence(processor.outputBuffer.id))
+          )
+        ) {
+          toDeleteProcessors.push(processor);
+        } else {
+          await this.indexStorage(processor.inputBuffer);
+          await this.indexStorage(processor.outputBuffer);
+        }
+      },
+    );
+    toDeleteProcessors.forEach((processor, _index, _array) => {
+      this.storage.processors.splice(
+        this.storage.processors.indexOf(processor),
+        1,
+      );
+    });
+
+    const toDeleteTerminals: Array<model.Terminal> = [];
+    await asyncUtil.forEach(
+      this.storage.terminals,
+      async (terminal, _index, _array) => {
+        if (!(await this.checkExistence(terminal.storage.id))) {
+          toDeleteTerminals.push(terminal);
+        } else {
+          await this.indexStorage(terminal.storage);
+        }
+      },
+    );
+    toDeleteTerminals.forEach((terminal, _index, _array) => {
+      this.storage.terminals.splice(
+        this.storage.terminals.indexOf(terminal),
+        1,
+      );
+    });
+  }
+
   private async checkExistence(id: string): Promise<boolean> {
     return (
       (await this.controller!.command(
@@ -468,7 +527,7 @@ export default class Server {
     await system.registerTerminal(args[0]!, args[1]!, res);
   }
 
-  private reindex(
+  private async reindex(
     req: restify.Request,
     res: restify.Response,
     _next: restify.Next,
@@ -484,7 +543,7 @@ export default class Server {
       return;
     }
 
-    // TODO
+    await system.reindex();
 
     res.status(204);
     res.end();
