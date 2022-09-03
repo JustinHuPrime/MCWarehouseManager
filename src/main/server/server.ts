@@ -276,10 +276,7 @@ export default class Server {
       .map(model.StorageSystem.fromJSON)
       .map((storage: model.StorageSystem) => new System(storage));
 
-    this.httpServer = restify.createServer({
-      cert: fs.readFileSync("cert.pem"),
-      key: fs.readFileSync("key.pem"),
-    });
+    this.httpServer = restify.createServer();
     this.httpServer.use(restify.plugins.bodyParser());
     this.httpServer.use(
       restify.plugins.queryParser({

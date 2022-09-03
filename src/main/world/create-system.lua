@@ -19,7 +19,7 @@
 local id = require("id")
 
 id.setSystemName(arg[1])
-local res, errMessage, _ = http.post("https://localhost:8080/" .. arg[1] .. "/create-system",
+local res, errMessage, _ = http.post("http://localhost:8080/" .. arg[1] .. "/create-system",
   "",
   {}
 )
