@@ -19,7 +19,7 @@
 local id = require("id")
 
 id.setTerminalName(arg[1])
-local res, errMessage, _ = http.post("https://localhost:8080/" .. id.getSystemName() .. "/register-terminal",
+local res, errMessage, _ = http.post("http://localhost:8080/" .. id.getSystemName() .. "/register-terminal",
   table.concat(arg, "\n"),
   { ["Content-Type"] = "text/plain" }
 )

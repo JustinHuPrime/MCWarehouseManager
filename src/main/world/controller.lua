@@ -18,7 +18,7 @@
 
 local id = require("id")
 
-local ws, errMessage = http.websocket("wss://localhost:8080")
+local ws, errMessage = http.websocket("ws://localhost:8080")
 if ws == nil then
   print("Error: " .. errMessage)
   return

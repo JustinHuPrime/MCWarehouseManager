@@ -1,5 +1,4 @@
 node_modules
 compiled
 public_html
-*.pem
 warehouses.json
