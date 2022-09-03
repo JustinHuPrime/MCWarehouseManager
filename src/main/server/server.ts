@@ -21,6 +21,7 @@ import * as fs from "fs";
 import * as restify from "restify";
 import WebSocket from "ws";
 import * as asyncUtil from "./asyncUtil";
+import { Resolver } from "dns";
 
 const PORT = 8080;
 
@@ -107,6 +108,18 @@ class System {
 
     const processor = new model.Processor(process, inputBuffer, outputBuffer);
     this.storage.processors.push(processor);
+
+    res.status(201);
+    res.end();
+  }
+
+  public registerRecipe(
+    process: string,
+    inputs: Array<model.RecipeItemSpecification>,
+    outputs: Array<model.RecipeOutputSpecification>,
+    res: restify.Response,
+  ) {
+    this.storage.recipes.push(new model.Recipe(process, inputs, outputs));
 
     res.status(201);
     res.end();
@@ -366,10 +379,35 @@ export default class Server {
 
     const args = req.body.split("\n");
 
-    // TODO
+    const inputs: Array<model.RecipeItemSpecification> = [];
+    for (
+      let idx = args.indexOf("--inputs") + 1;
+      args[idx] !== "--outputs";
+      idx += 2
+    ) {
+      inputs.push(
+        new model.RecipeItemSpecification(
+          args[idx]!,
+          Number.parseInt(args[idx + 1]!),
+        ),
+      );
+    }
 
-    res.status(201);
-    res.end();
+    const outputs: Array<model.RecipeOutputSpecification> = [];
+    for (let idx = args.indexOf("--outputs") + 1; idx < args.length; idx += 4) {
+      outputs.push(
+        new model.RecipeOutputSpecification(
+          new model.RecipeItemSpecification(
+            args[idx]!,
+            Number.parseInt(args[idx + 1]!),
+          ),
+          Number.parseInt(args[idx + 2]!),
+          Number.parseInt(args[idx + 3]!),
+        ),
+      );
+    }
+
+    system.registerRecipe(args[0]!, inputs, outputs, res);
   }
 
   private registerTerminal(
@@ -395,7 +433,7 @@ export default class Server {
     }
 
     const args = req.body.split("\n");
-    if (args.length !== 1) {
+    if (args.length !== 2) {
       res.status(400);
       res.end();
       return;

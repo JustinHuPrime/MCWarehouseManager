@@ -48,22 +48,18 @@ describe("fromJSON reversibility", () => {
     Array(27).fill(null),
   );
   const smelter = new model.Processor("smelting", inputChest, outputChest);
-  const ironIngotOutput = new model.RecipeOutput(
-    new model.ItemStack(
-      new model.Item("Iron Ingot", "minecraft:iron_ingot", 64),
-      1,
-    ),
+  const ironIngotSpec = new model.RecipeItemSpecification(
+    "minecraft:iron_ingot",
+    1,
+  );
+  const ironIngotOutput = new model.RecipeOutputSpecification(
+    ironIngotSpec,
     64,
     128,
   );
   const ironIngotSmelting = new model.Recipe(
     "smelting",
-    [
-      new model.ItemStack(
-        new model.Item("Raw Iron", "minecraft:raw_iron", 64),
-        1,
-      ),
-    ],
+    [new model.RecipeItemSpecification("minecraft:raw_iron", 1)],
     [ironIngotOutput],
   );
   const terminal = new model.Terminal(
@@ -130,13 +126,27 @@ describe("fromJSON reversibility", () => {
       );
   });
 
+  it("should be reversible for recipe item specs", () => {
+    chai
+      .expect(ironIngotSpec)
+      .to.deep.equal(
+        model.RecipeItemSpecification.fromJSON(
+          JSON.parse(
+            JSON.stringify(model.RecipeItemSpecification.toJSON(ironIngotSpec)),
+          ),
+        ),
+      );
+  });
+
   it("should be reversible for recipe outputs", () => {
     chai
       .expect(ironIngotOutput)
       .to.deep.equal(
-        model.RecipeOutput.fromJSON(
+        model.RecipeOutputSpecification.fromJSON(
           JSON.parse(
-            JSON.stringify(model.RecipeOutput.toJSON(ironIngotOutput)),
+            JSON.stringify(
+              model.RecipeOutputSpecification.toJSON(ironIngotOutput),
+            ),
           ),
         ),
       );

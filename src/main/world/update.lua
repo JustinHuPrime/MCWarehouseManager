@@ -21,6 +21,7 @@ for _, file in ipairs({
   "create-system.lua",
   "id.lua",
   "register-processor.lua",
+  "register-recipe.lua",
   "register-storage.lua",
   "set-system-name.lua",
   "set-terminal-name.lua",

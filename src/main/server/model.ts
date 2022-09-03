@@ -101,13 +101,13 @@ export class Terminal {
  */
 export class Recipe {
   public readonly process: string;
-  public readonly inputs: Array<ItemStack>;
-  public readonly outputs: Array<RecipeOutput>;
+  public readonly inputs: Array<RecipeItemSpecification>;
+  public readonly outputs: Array<RecipeOutputSpecification>;
 
   public constructor(
     process: string,
-    inputs: Array<ItemStack>,
-    outputs: Array<RecipeOutput>,
+    inputs: Array<RecipeItemSpecification>,
+    outputs: Array<RecipeOutputSpecification>,
   ) {
     this.process = process;
     this.inputs = inputs;
@@ -117,16 +117,16 @@ export class Recipe {
   public static fromJSON(json: any): Recipe {
     return new Recipe(
       json.process,
-      json.inputs.map(ItemStack.fromJSON),
-      json.outputs.map(RecipeOutput.fromJSON),
+      json.inputs.map(RecipeItemSpecification.fromJSON),
+      json.outputs.map(RecipeOutputSpecification.fromJSON),
     );
   }
 
   public static toJSON(recipe: Recipe): any {
     return {
       process: recipe.process,
-      inputs: recipe.inputs.map(ItemStack.toJSON),
-      outputs: recipe.outputs.map(RecipeOutput.toJSON),
+      inputs: recipe.inputs.map(RecipeItemSpecification.toJSON),
+      outputs: recipe.outputs.map(RecipeOutputSpecification.toJSON),
     };
   }
 }
@@ -134,8 +134,8 @@ export class Recipe {
 /**
  * A recipe output specification
  */
-export class RecipeOutput {
-  public readonly outputItem: ItemStack;
+export class RecipeOutputSpecification {
+  public readonly outputItem: RecipeItemSpecification;
   public readonly minOutputStock: number;
   public readonly maxOutputStock: number;
 
@@ -145,7 +145,7 @@ export class RecipeOutput {
    * @param maxOutputStock will make enough to bring it to this amount
    */
   public constructor(
-    outputItem: ItemStack,
+    outputItem: RecipeItemSpecification,
     minOutputStock: number,
     maxOutputStock: number,
   ) {
@@ -154,19 +154,47 @@ export class RecipeOutput {
     this.maxOutputStock = maxOutputStock;
   }
 
-  public static fromJSON(json: any): RecipeOutput {
-    return new RecipeOutput(
-      ItemStack.fromJSON(json.outputItem),
+  public static fromJSON(json: any): RecipeOutputSpecification {
+    return new RecipeOutputSpecification(
+      RecipeItemSpecification.fromJSON(json.outputItem),
       json.minOutputStock,
       json.maxOutputStock,
     );
   }
 
-  public static toJSON(recipeOutput: RecipeOutput): any {
+  public static toJSON(recipeOutput: RecipeOutputSpecification): any {
     return {
-      outputItem: ItemStack.toJSON(recipeOutput.outputItem),
+      outputItem: RecipeItemSpecification.toJSON(recipeOutput.outputItem),
       minOutputStock: recipeOutput.minOutputStock,
       maxOutputStock: recipeOutput.maxOutputStock,
+    };
+  }
+}
+
+/**
+ * Item stack specification
+ */
+export class RecipeItemSpecification {
+  public readonly id: string;
+  public readonly count: number;
+
+  /**
+   * @param id minecraft item id
+   * @param count how many of that item id
+   */
+  public constructor(id: string, count: number) {
+    this.id = id;
+    this.count = count;
+  }
+
+  public static fromJSON(json: any): RecipeItemSpecification {
+    return new RecipeItemSpecification(json.id, json.count);
+  }
+
+  public static toJSON(spec: RecipeItemSpecification): any {
+    return {
+      id: spec.id,
+      count: spec.count,
     };
   }
 }

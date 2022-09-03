@@ -19,7 +19,7 @@
 local id = require("id")
 
 local res, errMessage, _ = http.post("http://localhost:8080/" .. id.getSystemName() .. "/register-storage",
-  arg[1],
+  table.concat(arg, "\n"),
   { ["Content-Type"] = "text/plain" }
 )
 if res == nil then
