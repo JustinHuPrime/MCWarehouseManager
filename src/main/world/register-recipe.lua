@@ -18,7 +18,7 @@
 
 local id = require("id")
 
-local res, errMessage, _ = http.post("http://localhost:8080/" .. id.getSystemName() .. "/register-recipe",
+local res, errMessage, _ = http.post("https://localhost:8080/" .. id.getSystemName() .. "/register-recipe",
   table.concat(arg, "\n"),
   { ["Content-Type"] = "text/plain" }
 )

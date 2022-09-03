@@ -31,5 +31,5 @@ for _, file in ipairs({
     fs.delete(file)
   end
 
-  assert(shell.execute("wget", "http://localhost:8080/world/" .. file))
+  assert(shell.execute("wget", "https://localhost:8080/world/" .. file))
 end

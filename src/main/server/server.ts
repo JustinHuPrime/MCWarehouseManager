@@ -21,7 +21,6 @@ import * as fs from "fs";
 import * as restify from "restify";
 import WebSocket from "ws";
 import * as asyncUtil from "./asyncUtil";
-import { Resolver } from "dns";
 
 const PORT = 8080;
 
@@ -218,7 +217,10 @@ export default class Server {
       .map(model.StorageSystem.fromJSON)
       .map((storage: model.StorageSystem) => new System(storage));
 
-    this.httpServer = restify.createServer();
+    this.httpServer = restify.createServer({
+      cert: fs.readFileSync("cert.pem"),
+      key: fs.readFileSync("key.pem"),
+    });
     this.httpServer.use(restify.plugins.bodyParser());
     this.httpServer.use(
       restify.plugins.queryParser({
