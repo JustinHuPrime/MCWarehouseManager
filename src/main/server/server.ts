@@ -490,6 +490,7 @@ export default class Server {
     }
 
     system.registerRecipe(args[0]!, inputs, outputs, res);
+    this.save();
   }
 
   private async registerTerminal(
@@ -522,6 +523,7 @@ export default class Server {
     }
 
     await system.registerTerminal(args[0]!, args[1]!, res);
+    this.save();
   }
 
   private async reindex(
@@ -541,6 +543,7 @@ export default class Server {
     }
 
     await system.reindex();
+    this.save();
 
     res.status(204);
     res.end();
@@ -563,6 +566,7 @@ export default class Server {
     }
 
     // TODO
+    this.save();
 
     res.status(204);
     res.end();
@@ -585,6 +589,7 @@ export default class Server {
     }
 
     // TODO
+    this.save();
 
     res.status(204);
     res.end();
@@ -607,6 +612,7 @@ export default class Server {
     }
 
     // TODO
+    this.save();
 
     res.status(204);
     res.end();

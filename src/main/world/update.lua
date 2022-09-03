@@ -23,6 +23,8 @@ for _, file in ipairs({
   "register-processor.lua",
   "register-recipe.lua",
   "register-storage.lua",
+  "register-terminal.lua",
+  "reindex.lua",
   "set-system-name.lua",
   "set-terminal-name.lua",
   "update.lua"
